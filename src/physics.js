@@ -28,7 +28,7 @@ export const MATERIALS = {
 }
 
 export function newLayer(type) {
-  return { ...MATERIALS[type], type, id: `${type}-${crypto.randomUUID()}` }
+  return { ...MATERIALS[type], type, enabled: true, id: `${type}-${crypto.randomUUID()}` }
 }
 
 function gapResistance(layer, leftE, rightE, meanK) {
@@ -93,25 +93,28 @@ function solveTemperatures(resistances, sources, outside, inside) {
 }
 
 export function solveSystem(layers, settings) {
+  const activeLayers = layers.filter((layer) => layer.enabled !== false)
   const outside = settings.outdoorTemp
   const inside = settings.indoorTemp
   const meanK = ((outside + inside) / 2) + 273.15
-  const resistances = layers.map((layer, i) => layerResistance(layer, i, layers, meanK))
+  const resistances = activeLayers.map((layer, i) => layerResistance(layer, i, activeLayers, meanK))
 
   let shortwave = settings.sunlight
   let reflected = 0
-  const absorbed = layers.map((layer) => {
+  const absorbed = activeLayers.map((layer) => {
     const value = shortwave * layer.absorptance
     reflected += shortwave * layer.reflectance
     shortwave *= layer.transmittance
     return value
   })
 
-  const temperatures = solveTemperatures(resistances, absorbed, outside, inside)
-  const baselineTemperatures = solveTemperatures(resistances, layers.map(() => 0), outside, inside)
-  const boundaryIn = layers.length ? 1 / 8 + resistances.at(-1) / 2 : 1 / 8 + 1 / 20
-  const inwardThermal = layers.length ? (temperatures.at(-1) - inside) / boundaryIn : (outside - inside) / boundaryIn
-  const baseline = layers.length ? (baselineTemperatures.at(-1) - inside) / boundaryIn : inwardThermal
+  const activeTemperatures = solveTemperatures(resistances, absorbed, outside, inside)
+  const temperatureById = new Map(activeLayers.map((layer, index) => [layer.id, activeTemperatures[index]]))
+  const temperatures = layers.map((layer) => layer.enabled === false ? null : temperatureById.get(layer.id))
+  const baselineTemperatures = solveTemperatures(resistances, activeLayers.map(() => 0), outside, inside)
+  const boundaryIn = activeLayers.length ? 1 / 8 + resistances.at(-1) / 2 : 1 / 8 + 1 / 20
+  const inwardThermal = activeLayers.length ? (activeTemperatures.at(-1) - inside) / boundaryIn : (outside - inside) / boundaryIn
+  const baseline = activeLayers.length ? (baselineTemperatures.at(-1) - inside) / boundaryIn : inwardThermal
   const absorbedToRoom = inwardThermal - baseline
   const totalGain = shortwave + inwardThermal
   const rejected = Math.max(0, settings.sunlight - reflected - shortwave - absorbedToRoom)

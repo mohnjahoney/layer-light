@@ -91,6 +91,7 @@ export default function App() {
   useEffect(() => () => clearTimeout(dragTimer.current), [])
 
   const updateSelected = (changes) => setLayers((items) => items.map((item) => item.id === selectedId ? { ...item, ...changes } : item))
+  const toggleLayer = (id) => setLayers((items) => items.map((item) => item.id === id ? { ...item, enabled: item.enabled === false } : item))
   const addLayer = (type) => {
     const layer = newLayer(type)
     setLayers((items) => [...items, layer])
@@ -201,10 +202,11 @@ export default function App() {
             <div className={`layer-stack ${dragUi.draggingId ? 'stack-is-dragging' : ''}`}>
               {layers.length === 0 && <div className="empty-state">Add a material to begin</div>}
               {layers.map((layer, index) => (
-                <div data-layer-id={layer.id} className={`layer-card ${selectedId === layer.id ? 'selected' : ''} ${dragUi.holdingId === layer.id ? 'holding' : ''} ${dragUi.draggingId === layer.id ? 'moving' : ''}`} key={layer.id} role="button" tabIndex="0" onClick={() => setSelectedId(layer.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedId(layer.id) }}>
+                <div data-layer-id={layer.id} className={`layer-card ${selectedId === layer.id ? 'selected' : ''} ${layer.enabled === false ? 'disabled' : ''} ${dragUi.holdingId === layer.id ? 'holding' : ''} ${dragUi.draggingId === layer.id ? 'moving' : ''}`} key={layer.id} role="button" tabIndex="0" onClick={() => setSelectedId(layer.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedId(layer.id) }}>
+                  <button className="layer-toggle" aria-label={`${layer.enabled === false ? 'Include' : 'Exclude'} ${layer.name} in calculation`} aria-pressed={layer.enabled !== false} title={layer.enabled === false ? 'Turn layer on' : 'Turn layer off'} onClick={(e) => { e.stopPropagation(); toggleLayer(layer.id) }}><i /></button>
                   <div className="layer-swatch" style={{ background: layer.color, width: layer.kind === 'solid' ? `${Math.min(42, 17 + layer.thickness * 2)}px` : '48px' }} />
                   <span>{layer.name}</span>
-                  <small>{fmt(result.temperatures[index], 1)}°</small>
+                  <small>{layer.enabled === false ? 'OFF' : `${fmt(result.temperatures[index], 1)}°`}</small>
                   <button className="drag-grip" aria-label={`Hold and drag ${layer.name} to reorder`} title="Hold, then drag"
                     onPointerDown={(e) => startDragHold(e, layer)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}
                     onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.preventDefault(); move(index, -1) } if (e.key === 'ArrowRight') { e.preventDefault(); move(index, 1) } }}>

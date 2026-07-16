@@ -10,6 +10,7 @@ The first version is an explanatory comparison tool, not a building-code or engi
 
 - Add glass, film, curtain, air-gap, vacuum-gap, and reflective layers from a material palette.
 - Reorder layers by holding their grip for half a second and dragging them into place; duplicate, select, edit, and remove layers.
+- Toggle any layer off to keep it in the stack while excluding it from the optical and thermal calculation for quick with/without comparisons.
 - Edit thickness, conductivity, emissivity, and shortwave transmittance/reflectance/absorptance.
 - Keep the three shortwave fractions constrained to sum to one with a draggable ternary control.
 - Adjust sunlight, indoor temperature, and outdoor temperature.
