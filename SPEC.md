@@ -32,7 +32,7 @@ The UI must expose assumptions and avoid suggesting that the result includes edg
 ## Visual output
 
 - A physical stack view with temperatures and heat-flow direction.
-- Shortwave energy ribbons aligned with the physical stack, branching to show reflection and absorption at each layer while the transmitted ribbon continues toward the room.
+- An optional, expanded shortwave energy-flow mode aligned with the physical stack. Bold curved ribbons and arrowheads show energy moving inward, reflecting outdoors, or being absorbed at each layer.
 - A compact energy-flow visualization showing reflected energy, solar energy reaching the room, heat from absorbed sunlight reaching the room, and energy rejected outdoors.
 - Summary metrics for total room heat gain and effective R-value.
 - Plain-language comparison cues and model notes.

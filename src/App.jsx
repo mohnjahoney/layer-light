@@ -79,27 +79,38 @@ function EnergyBar({ result, sunlight }) {
 }
 
 function EnergyRibbons({ layers, flows, sunlight }) {
-  const widthFor = (value, max = 12) => sunlight > 0 ? Math.max(value > 0 ? 1 : 0, max * value / sunlight) : 0
+  const widthFor = (value, max = 22) => sunlight > 0 ? Math.max(value > 0 ? 1.5 : 0, max * value / sunlight) : 0
   return (
     <div className="ribbon-viz">
       <div className="ribbon-heading">
-        <div className="ribbon-legend"><span><i className="transmitted" />Transmitted</span><span><i className="reflected" />Reflected</span><span><i className="absorbed" />Absorbed</span></div>
-        <strong>{fmt(flows.at(-1)?.transmitted ?? sunlight)} W/m² to room</strong>
+        <div><p className="eyebrow">Solar journey</p><h3>Follow the energy</h3></div>
+        <div className="ribbon-arrival"><span>arrives in room</span><strong>{fmt(flows.at(-1)?.transmitted ?? sunlight)} W/m²</strong></div>
       </div>
+      <div className="ribbon-legend"><span><i className="transmitted" />Moving inward</span><span><i className="reflected" />Sent back outside</span><span><i className="absorbed" />Held by layer</span></div>
       <div className="ribbon-track" style={{ gridTemplateColumns: `repeat(${Math.max(layers.length, 1)}, 78px)` }} aria-label="Shortwave solar energy flow through layers">
         {layers.map((layer, index) => {
           const flow = flows[index]
-          const reflectedWidth = widthFor(flow.reflected, 10)
-          const absorbedWidth = widthFor(flow.absorbed, 10)
+          const reflectedWidth = widthFor(flow.reflected, 17)
+          const absorbedWidth = widthFor(flow.absorbed, 17)
+          const markerId = `arrow-${index}-${layer.id}`
+          const isLast = index === layers.length - 1
           return (
-            <svg key={layer.id} className={`ribbon-cell ${flow.bypassed ? 'bypassed' : ''}`} viewBox="0 0 78 72" role="img" aria-label={`${layer.name}: ${fmt(flow.transmitted)} watts per square meter transmitted, ${fmt(flow.reflected)} reflected, ${fmt(flow.absorbed)} absorbed`}>
+            <svg key={layer.id} className={`ribbon-cell ${flow.bypassed ? 'bypassed' : ''}`} viewBox="0 0 78 170" role="img" aria-label={`${layer.name}: ${fmt(flow.transmitted)} watts per square meter transmitted, ${fmt(flow.reflected)} reflected, ${fmt(flow.absorbed)} absorbed`}>
               <title>{layer.name}: {fmt(flow.transmitted)} transmitted · {fmt(flow.reflected)} reflected · {fmt(flow.absorbed)} absorbed W/m²</title>
-              <path d="M-8 35 L40 35" className="ribbon transmitted" style={{ strokeWidth: widthFor(flow.incoming) }} />
-              <path d="M39 35 L86 35" className="ribbon transmitted" style={{ strokeWidth: widthFor(flow.transmitted) }} />
-              {!flow.bypassed && flow.reflected > 0 && <path d="M40 35 C31 24 18 14 -7 10" className="ribbon reflected" style={{ strokeWidth: reflectedWidth }} />}
-              {!flow.bypassed && flow.absorbed > 0 && <path d="M40 35 C40 47 40 57 40 71" className="ribbon absorbed" style={{ strokeWidth: absorbedWidth }} />}
-              <circle cx="40" cy="35" r={Math.max(2.5, widthFor(flow.incoming) / 2)} className="ribbon-junction" />
-              {flow.bypassed && <><rect x="27" y="24" width="26" height="22" rx="5" className="bypass-box" /><text x="40" y="18" textAnchor="middle">BYPASS</text></>}
+              <defs>
+                <marker id={`${markerId}-gold`} markerWidth="20" markerHeight="20" refX="16" refY="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L20 10 L0 20 Z" className="arrow-gold" /></marker>
+                <marker id={`${markerId}-blue`} markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L14 7 L0 14 Z" className="arrow-blue" /></marker>
+                <marker id={`${markerId}-coral`} markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L14 7 L0 14 Z" className="arrow-coral" /></marker>
+              </defs>
+              <path d="M-9 83 C7 83 25 83 40 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.incoming) }} />
+              <path d="M39 83 C54 83 70 83 87 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.transmitted) }} markerEnd={isLast ? `url(#${markerId}-gold)` : undefined} />
+              {!flow.bypassed && flow.reflected > 0 && <path d="M40 83 C28 69 26 39 -8 20" className="ribbon reflected" style={{ strokeWidth: reflectedWidth }} markerEnd={`url(#${markerId}-blue)`} />}
+              {!flow.bypassed && flow.absorbed > 0 && <path d="M40 83 C53 101 28 124 40 158" className="ribbon absorbed" style={{ strokeWidth: absorbedWidth }} markerEnd={`url(#${markerId}-coral)`} />}
+              <circle cx="40" cy="83" r={Math.max(5, widthFor(flow.incoming) / 2)} className="ribbon-junction-halo" />
+              <circle cx="40" cy="83" r={Math.max(3, widthFor(flow.incoming) / 3.2)} className="ribbon-junction" />
+              {!flow.bypassed && flow.reflected >= sunlight * .04 && <text x="5" y="12" textAnchor="middle" className="branch-value reflected-value">{fmt(flow.reflected)}</text>}
+              {!flow.bypassed && flow.absorbed >= sunlight * .04 && <text x="40" y="168" textAnchor="middle" className="branch-value absorbed-value">{fmt(flow.absorbed)}</text>}
+              {flow.bypassed && <><rect x="22" y="66" width="36" height="34" rx="9" className="bypass-box" /><text x="40" y="56" textAnchor="middle">BYPASS</text></>}
             </svg>
           )
         })}
@@ -112,6 +123,7 @@ export default function App() {
   const [layers, setLayers] = useState(INITIAL)
   const [selectedId, setSelectedId] = useState(INITIAL[0].id)
   const [settings, setSettings] = useState({ sunlight: 700, outdoorTemp: 32, indoorTemp: 22 })
+  const [flowVisible, setFlowVisible] = useState(true)
   const [dragUi, setDragUi] = useState({ holdingId: null, draggingId: null })
   const dragTimer = useRef(null)
   const dragState = useRef(null)
@@ -226,10 +238,10 @@ export default function App() {
             <button className="reset" onClick={() => { const fresh = [newLayer('glass'), newLayer('air'), newLayer('glass'), newLayer('curtain')]; setLayers(fresh); setSelectedId(fresh[0].id) }}>Reset example</button>
           </aside>
 
-          <section className="stack-panel card">
-            <div className="stack-labels"><span>OUTDOORS</span><span>ROOM</span></div>
+          <section className={`stack-panel card ${flowVisible ? 'flow-expanded' : 'flow-collapsed'}`}>
+            <div className="stack-labels"><span>OUTDOORS</span><button className="flow-toggle" aria-pressed={flowVisible} onClick={() => setFlowVisible((visible) => !visible)}><i /> Energy flow</button><span>ROOM</span></div>
             <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} W/m² incident</b></div>
-            <EnergyRibbons layers={layers} flows={result.solarByLayer} sunlight={settings.sunlight} />
+            {flowVisible && <EnergyRibbons layers={layers} flows={result.solarByLayer} sunlight={settings.sunlight} />}
             <div className={`layer-stack ${dragUi.draggingId ? 'stack-is-dragging' : ''}`}>
               {layers.length === 0 && <div className="empty-state">Add a material to begin</div>}
               {layers.map((layer, index) => (
