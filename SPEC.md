@@ -40,3 +40,7 @@ The UI must expose assumptions and avoid suggesting that the result includes edg
 1. Split radiation into shortwave solar and longwave thermal bands with independent material properties.
 2. Add transient heating, thermal mass, angle of incidence, multiple reflections, and saved side-by-side scenarios.
 3. Validate selected assemblies against a more complete numerical or reference model.
+
+## Deployment
+
+The site is built by GitHub Actions from the `main` branch and deployed as a GitHub Pages artifact. Generated `dist/` files are not committed to the repository.
