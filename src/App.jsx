@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MATERIALS, newLayer, solveSystem } from './physics.js'
 
 const INITIAL = [newLayer('glass'), newLayer('air'), newLayer('glass'), newLayer('curtain')]
@@ -82,8 +82,13 @@ export default function App() {
   const [layers, setLayers] = useState(INITIAL)
   const [selectedId, setSelectedId] = useState(INITIAL[0].id)
   const [settings, setSettings] = useState({ sunlight: 700, outdoorTemp: 32, indoorTemp: 22 })
+  const [dragUi, setDragUi] = useState({ holdingId: null, draggingId: null })
+  const dragTimer = useRef(null)
+  const dragState = useRef(null)
   const result = useMemo(() => solveSystem(layers, settings), [layers, settings])
   const selected = layers.find((layer) => layer.id === selectedId)
+
+  useEffect(() => () => clearTimeout(dragTimer.current), [])
 
   const updateSelected = (changes) => setLayers((items) => items.map((item) => item.id === selectedId ? { ...item, ...changes } : item))
   const addLayer = (type) => {
@@ -95,6 +100,59 @@ export default function App() {
     const nextIndex = index + amount
     if (nextIndex < 0 || nextIndex >= layers.length) return
     setLayers((items) => { const next = [...items]; [next[index], next[nextIndex]] = [next[nextIndex], next[index]]; return next })
+  }
+  const reorderLayer = (movingId, targetId) => {
+    if (movingId === targetId) return
+    setLayers((items) => {
+      const from = items.findIndex((item) => item.id === movingId)
+      const to = items.findIndex((item) => item.id === targetId)
+      if (from < 0 || to < 0 || from === to) return items
+      const next = [...items]
+      const [moving] = next.splice(from, 1)
+      next.splice(to, 0, moving)
+      return next
+    })
+  }
+  const startDragHold = (event, layer) => {
+    if (event.button !== undefined && event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const pointerId = event.pointerId
+    event.currentTarget.setPointerCapture(pointerId)
+    setSelectedId(layer.id)
+    dragState.current = { id: layer.id, pointerId, startX: event.clientX, startY: event.clientY, active: false }
+    setDragUi({ holdingId: layer.id, draggingId: null })
+    clearTimeout(dragTimer.current)
+    dragTimer.current = setTimeout(() => {
+      if (dragState.current?.pointerId !== pointerId) return
+      dragState.current.active = true
+      setDragUi({ holdingId: null, draggingId: layer.id })
+      if (navigator.vibrate) navigator.vibrate(18)
+    }, 500)
+  }
+  const continueDrag = (event) => {
+    const state = dragState.current
+    if (!state || state.pointerId !== event.pointerId) return
+    const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
+    if (!state.active && distance > 10) {
+      clearTimeout(dragTimer.current)
+      setDragUi({ holdingId: null, draggingId: null })
+      return
+    }
+    if (!state.active) return
+    event.preventDefault()
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-layer-id]')
+    if (target?.dataset.layerId) reorderLayer(state.id, target.dataset.layerId)
+  }
+  const finishDrag = (event) => {
+    const state = dragState.current
+    if (!state || state.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    clearTimeout(dragTimer.current)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    dragState.current = null
+    setDragUi({ holdingId: null, draggingId: null })
   }
   const duplicate = (layer) => {
     const copy = { ...layer, id: `${layer.type}-${crypto.randomUUID()}`, name: `${layer.name} copy` }
@@ -140,19 +198,23 @@ export default function App() {
           <section className="stack-panel card">
             <div className="stack-labels"><span>OUTDOORS</span><span>ROOM</span></div>
             <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} W/m²</b></div>
-            <div className="layer-stack">
+            <div className={`layer-stack ${dragUi.draggingId ? 'stack-is-dragging' : ''}`}>
               {layers.length === 0 && <div className="empty-state">Add a material to begin</div>}
               {layers.map((layer, index) => (
-                <div className={`layer-card ${selectedId === layer.id ? 'selected' : ''}`} key={layer.id} role="button" tabIndex="0" onClick={() => setSelectedId(layer.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedId(layer.id) }}>
+                <div data-layer-id={layer.id} className={`layer-card ${selectedId === layer.id ? 'selected' : ''} ${dragUi.holdingId === layer.id ? 'holding' : ''} ${dragUi.draggingId === layer.id ? 'moving' : ''}`} key={layer.id} role="button" tabIndex="0" onClick={() => setSelectedId(layer.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedId(layer.id) }}>
                   <div className="layer-swatch" style={{ background: layer.color, width: layer.kind === 'solid' ? `${Math.min(42, 17 + layer.thickness * 2)}px` : '48px' }} />
                   <span>{layer.name}</span>
                   <small>{fmt(result.temperatures[index], 1)}°</small>
-                  <div className="layer-actions">
-                    <button title="Move left" aria-label={`Move ${layer.name} left`} onClick={(e) => { e.stopPropagation(); move(index, -1) }}>‹</button>
-                    <button title="Move right" aria-label={`Move ${layer.name} right`} onClick={(e) => { e.stopPropagation(); move(index, 1) }}>›</button>
-                  </div>
+                  <button className="drag-grip" aria-label={`Hold and drag ${layer.name} to reorder`} title="Hold, then drag"
+                    onPointerDown={(e) => startDragHold(e, layer)} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}
+                    onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.preventDefault(); move(index, -1) } if (e.key === 'ArrowRight') { e.preventDefault(); move(index, 1) } }}>
+                    <i /><i /><i />
+                  </button>
                 </div>
               ))}
+            </div>
+            <div className={`drag-status ${dragUi.holdingId ? 'is-holding' : ''} ${dragUi.draggingId ? 'is-moving' : ''}`} aria-live="polite">
+              {dragUi.holdingId ? 'Keep holding…' : dragUi.draggingId ? 'Movable — drag to a new position, then release' : 'Hold the grip for half a second to move a layer'}
             </div>
             <div className="heat-arrow"><span>Net room heat</span><i className={result.totalGain < 0 ? 'reverse' : ''} /><strong>{fmt(Math.abs(result.totalGain))} W/m² {result.totalGain >= 0 ? 'in' : 'out'}</strong></div>
             <div className="metric-row">
