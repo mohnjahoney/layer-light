@@ -61,7 +61,7 @@ function NumberField({ label, value, unit, min = 0, max, step = 0.01, onChange }
 
 function EnergyBar({ result, sunlight }) {
   const values = [
-    { label: 'Reflected', value: result.reflected, color: '#d5d9c8' },
+    { label: 'Reflected', value: result.reflected, color: '#82aeb5' },
     { label: 'Direct solar', value: result.directSolar, color: '#f1b94d' },
     { label: 'Absorbed → room', value: Math.max(0, result.absorbedToRoom), color: '#df7558' },
     { label: 'Rejected outdoors', value: result.rejected, color: '#4e7477' },
@@ -73,6 +73,36 @@ function EnergyBar({ result, sunlight }) {
       </div>
       <div className="energy-legend">
         {values.map((item) => <div key={item.label}><i style={{ background: item.color }} /><span>{item.label}</span><strong>{fmt(item.value)} W/m²</strong></div>)}
+      </div>
+    </div>
+  )
+}
+
+function EnergyRibbons({ layers, flows, sunlight }) {
+  const widthFor = (value, max = 12) => sunlight > 0 ? Math.max(value > 0 ? 1 : 0, max * value / sunlight) : 0
+  return (
+    <div className="ribbon-viz">
+      <div className="ribbon-heading">
+        <div className="ribbon-legend"><span><i className="transmitted" />Transmitted</span><span><i className="reflected" />Reflected</span><span><i className="absorbed" />Absorbed</span></div>
+        <strong>{fmt(flows.at(-1)?.transmitted ?? sunlight)} W/m² to room</strong>
+      </div>
+      <div className="ribbon-track" style={{ gridTemplateColumns: `repeat(${Math.max(layers.length, 1)}, 78px)` }} aria-label="Shortwave solar energy flow through layers">
+        {layers.map((layer, index) => {
+          const flow = flows[index]
+          const reflectedWidth = widthFor(flow.reflected, 10)
+          const absorbedWidth = widthFor(flow.absorbed, 10)
+          return (
+            <svg key={layer.id} className={`ribbon-cell ${flow.bypassed ? 'bypassed' : ''}`} viewBox="0 0 78 72" role="img" aria-label={`${layer.name}: ${fmt(flow.transmitted)} watts per square meter transmitted, ${fmt(flow.reflected)} reflected, ${fmt(flow.absorbed)} absorbed`}>
+              <title>{layer.name}: {fmt(flow.transmitted)} transmitted · {fmt(flow.reflected)} reflected · {fmt(flow.absorbed)} absorbed W/m²</title>
+              <path d="M-8 35 L40 35" className="ribbon transmitted" style={{ strokeWidth: widthFor(flow.incoming) }} />
+              <path d="M39 35 L86 35" className="ribbon transmitted" style={{ strokeWidth: widthFor(flow.transmitted) }} />
+              {!flow.bypassed && flow.reflected > 0 && <path d="M40 35 C31 24 18 14 -7 10" className="ribbon reflected" style={{ strokeWidth: reflectedWidth }} />}
+              {!flow.bypassed && flow.absorbed > 0 && <path d="M40 35 C40 47 40 57 40 71" className="ribbon absorbed" style={{ strokeWidth: absorbedWidth }} />}
+              <circle cx="40" cy="35" r={Math.max(2.5, widthFor(flow.incoming) / 2)} className="ribbon-junction" />
+              {flow.bypassed && <><rect x="27" y="24" width="26" height="22" rx="5" className="bypass-box" /><text x="40" y="18" textAnchor="middle">BYPASS</text></>}
+            </svg>
+          )
+        })}
       </div>
     </div>
   )
@@ -198,7 +228,8 @@ export default function App() {
 
           <section className="stack-panel card">
             <div className="stack-labels"><span>OUTDOORS</span><span>ROOM</span></div>
-            <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} W/m²</b></div>
+            <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} W/m² incident</b></div>
+            <EnergyRibbons layers={layers} flows={result.solarByLayer} sunlight={settings.sunlight} />
             <div className={`layer-stack ${dragUi.draggingId ? 'stack-is-dragging' : ''}`}>
               {layers.length === 0 && <div className="empty-state">Add a material to begin</div>}
               {layers.map((layer, index) => (

@@ -101,12 +101,17 @@ export function solveSystem(layers, settings) {
 
   let shortwave = settings.sunlight
   let reflected = 0
-  const absorbed = activeLayers.map((layer) => {
-    const value = shortwave * layer.absorptance
-    reflected += shortwave * layer.reflectance
-    shortwave *= layer.transmittance
-    return value
+  const solarByLayer = layers.map((layer) => {
+    const incoming = shortwave
+    if (layer.enabled === false) return { incoming, reflected: 0, absorbed: 0, transmitted: incoming, bypassed: true }
+    const layerReflected = incoming * layer.reflectance
+    const layerAbsorbed = incoming * layer.absorptance
+    shortwave = incoming * layer.transmittance
+    reflected += layerReflected
+    return { incoming, reflected: layerReflected, absorbed: layerAbsorbed, transmitted: shortwave, bypassed: false }
   })
+  const solarById = new Map(layers.map((layer, index) => [layer.id, solarByLayer[index]]))
+  const absorbed = activeLayers.map((layer) => solarById.get(layer.id).absorbed)
 
   const activeTemperatures = solveTemperatures(resistances, absorbed, outside, inside)
   const temperatureById = new Map(activeLayers.map((layer, index) => [layer.id, activeTemperatures[index]]))
@@ -122,6 +127,7 @@ export function solveSystem(layers, settings) {
 
   return {
     temperatures,
+    solarByLayer,
     resistances,
     totalR,
     reflected,
