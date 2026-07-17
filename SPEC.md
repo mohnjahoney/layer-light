@@ -23,11 +23,12 @@ The first version is an explanatory comparison tool, not a building-code or engi
 - Simplified conduction, natural convection, and linearized longwave radiation across gaps.
 - Vacuum gaps remove gas conduction and convection while retaining radiation.
 - Incident sunlight is separated into reflected, absorbed, and transmitted energy at each layer.
+- Repeated shortwave reflections are summed analytically with coupled forward and backward fluxes; no bounce count or stopping threshold is used.
 - Absorbed sunlight becomes a heat source at that layer and flows toward the room or outdoors through the thermal-resistance network.
 - Directly transmitted shortwave energy is counted as room heat gain.
 - Surface films represent indoor and outdoor convection.
 
-The UI must expose assumptions and avoid suggesting that the result includes edge effects, multiple internal reflections, spectral detail, angle of incidence, airflow around curtains, or transient thermal mass.
+The UI must expose assumptions and avoid suggesting that the result includes edge effects, coherent wave interference, spectral detail, angle of incidence, airflow around curtains, or transient thermal mass.
 
 ## Visual output
 
@@ -40,7 +41,7 @@ The UI must expose assumptions and avoid suggesting that the result includes edg
 ## Later levels
 
 1. Split radiation into shortwave solar and longwave thermal bands with independent material properties.
-2. Add transient heating, thermal mass, angle of incidence, multiple reflections, and saved side-by-side scenarios.
+2. Add transient heating, thermal mass, angle of incidence, and saved side-by-side scenarios.
 3. Validate selected assemblies against a more complete numerical or reference model.
 
 ## Deployment

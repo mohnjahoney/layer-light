@@ -86,7 +86,7 @@ function EnergyRibbons({ layers, flows, sunlight }) {
         <div><p className="eyebrow">Solar journey</p><h3>Follow the energy</h3></div>
         <div className="ribbon-arrival"><span>arrives in room</span><strong>{fmt(flows.at(-1)?.transmitted ?? sunlight)} W/m²</strong></div>
       </div>
-      <div className="ribbon-legend"><span><i className="transmitted" />Moving inward</span><span><i className="reflected" />Sent back outside</span><span><i className="absorbed" />Held by layer</span></div>
+      <div className="ribbon-legend"><span><i className="transmitted" />Moving inward</span><span><i className="reflected" />Turns outward</span><span><i className="absorbed" />Held by layer</span></div>
       <div className="ribbon-track" style={{ gridTemplateColumns: `repeat(${Math.max(layers.length, 1)}, 78px)` }} aria-label="Shortwave solar energy flow through layers">
         {layers.map((layer, index) => {
           const flow = flows[index]
@@ -287,7 +287,7 @@ export default function App() {
 
         <section className="results-grid">
           <article className="card energy-card"><div className="section-heading"><div><p className="eyebrow">Solar balance</p><h3>Energy destinations</h3></div><span>per m² of window</span></div><EnergyBar result={result} sunlight={settings.sunlight} /></article>
-          <article className="card notes-card"><p className="eyebrow">Reading the model</p><h3>What this version includes</h3><p>Solids conduct heat. Gaps exchange heat by gas conduction, simplified convection, and longwave radiation; vacuum gaps retain only radiation. Absorbed sunlight heats its layer and divides between outdoors and the room.</p><div className="note"><span>i</span><p>Single-band optics, linearized radiation, no edge leakage or multiple reflections. Use this to compare ideas—not size HVAC equipment.</p></div></article>
+          <article className="card notes-card"><p className="eyebrow">Reading the model</p><h3>What this version includes</h3><p>Solids conduct heat. Gaps exchange heat by gas conduction, simplified convection, and longwave radiation; vacuum gaps retain only radiation. Absorbed sunlight heats its layer and divides between outdoors and the room.</p><div className="note"><span>i</span><p>Repeated shortwave reflections are included in the totals; ribbon branches show local directional turns. Single-band optics, no coherent interference or edge leakage. Use this to compare ideas—not size HVAC equipment.</p></div></article>
         </section>
       </main>
       <footer><span>Layer Light · exploratory thermal model</span><span>Model details in SPEC.md</span></footer>
