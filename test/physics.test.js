@@ -61,6 +61,34 @@ test('disabled layers are excluded from the optical solution', () => {
   assert.equal(createFlowViewModel([active, disabled], result).layerFlows[1].bypassed, true)
 })
 
+test('visualization junctions partition both directional incident fluxes', () => {
+  const layers = [
+    layer({ id: 'outer', transmittance: 0.72, reflectance: 0.18, absorptance: 0.10 }),
+    layer({ id: 'inner', transmittance: 0.58, reflectance: 0.34, absorptance: 0.08 }),
+  ]
+  const solution = solveSystem(layers, { sunlight: 800, outdoorTemp: 31, indoorTemp: 22 })
+  const { layerFlows } = createFlowViewModel(layers, solution)
+
+  for (const flow of layerFlows) {
+    closeTo(
+      flow.incidentInwardFlux,
+      flow.transmittedInwardFlux + flow.reflectedOutwardFlux + flow.absorbedFromInwardFlux,
+    )
+    closeTo(
+      flow.incidentOutwardFlux,
+      flow.transmittedOutwardFlux + flow.reflectedInwardFlux + flow.absorbedFromOutwardFlux,
+    )
+    closeTo(
+      flow.inwardFluxAfter,
+      flow.transmittedInwardFlux + flow.reflectedInwardFlux,
+    )
+    closeTo(
+      flow.outwardFluxBefore,
+      flow.transmittedOutwardFlux + flow.reflectedOutwardFlux,
+    )
+  }
+})
+
 test('perfect reflectors remain finite without an iteration cutoff', () => {
   const mirror = layer({ transmittance: 0, reflectance: 1, absorptance: 0 })
   const result = solveShortwave([mirror, mirror], 1000)

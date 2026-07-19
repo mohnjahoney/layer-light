@@ -80,38 +80,84 @@ function EnergyBar({ result, sunlight }) {
 }
 
 function EnergyRibbons({ layers, flows, sunlight }) {
-  const widthFor = (value, max = 22) => sunlight > 0 ? Math.max(value > 0 ? 1.5 : 0, max * value / sunlight) : 0
+  const widthFor = (value) => sunlight > 0 ? 24 * Math.max(0, value) / sunlight : 0
+  const partitionCenters = (center, widths) => {
+    const total = widths.reduce((sum, width) => sum + width, 0)
+    let cursor = center - total / 2
+    return widths.map((width) => {
+      const branchCenter = cursor + width / 2
+      cursor += width
+      return branchCenter
+    })
+  }
+
   return (
     <div className="ribbon-viz">
       <div className="ribbon-heading">
         <div><p className="eyebrow">Solar journey</p><h3>Follow the energy</h3></div>
         <div className="ribbon-arrival"><span>arrives in room</span><strong>{fmt(flows.at(-1)?.inwardFluxAfter ?? sunlight)} W/m²</strong></div>
       </div>
-      <div className="ribbon-legend"><span><i className="transmitted" />Moving inward</span><span><i className="reflected" />Turns outward</span><span><i className="absorbed" />Held by layer</span></div>
-      <div className="ribbon-track" style={{ gridTemplateColumns: `repeat(${Math.max(layers.length, 1)}, 78px)` }} aria-label="Shortwave solar energy flow through layers">
+      <div className="ribbon-legend"><span><i className="transmitted" />Inward flux</span><span><i className="reflected" />Outward flux</span><span><i className="absorbed" />Absorbed at layer</span></div>
+      <div className="ribbon-track" style={{ '--layer-count': Math.max(layers.length, 1) }} aria-label="Shortwave solar flux partitioned at each layer">
         {layers.map((layer, index) => {
           const flow = flows[index]
-          const reflectedWidth = widthFor(flow.localOutwardReflectionFlux, 17)
-          const absorbedWidth = widthFor(flow.absorbedFlux, 17)
+          const incidentInwardWidth = widthFor(flow.incidentInwardFlux)
+          const transmittedInwardWidth = widthFor(flow.transmittedInwardFlux)
+          const reflectedOutwardWidth = widthFor(flow.reflectedOutwardFlux)
+          const absorbedFromInwardWidth = widthFor(flow.absorbedFromInwardFlux)
+          const incidentOutwardWidth = widthFor(flow.incidentOutwardFlux)
+          const reflectedInwardWidth = widthFor(flow.reflectedInwardFlux)
+          const transmittedOutwardWidth = widthFor(flow.transmittedOutwardFlux)
+          const absorbedFromOutwardWidth = widthFor(flow.absorbedFromOutwardFlux)
+          const absorbedWidth = widthFor(flow.absorbedFlux)
+          const inwardSplit = partitionCenters(50, [transmittedInwardWidth, reflectedOutwardWidth, absorbedFromInwardWidth])
+          const outwardSplit = partitionCenters(116, [reflectedInwardWidth, transmittedOutwardWidth, absorbedFromOutwardWidth])
+          const inwardMerge = partitionCenters(50, [transmittedInwardWidth, reflectedInwardWidth])
+          const outwardMerge = partitionCenters(116, [reflectedOutwardWidth, transmittedOutwardWidth])
+          const absorptionMerge = partitionCenters(46, [absorbedFromInwardWidth, absorbedFromOutwardWidth])
           const markerId = `arrow-${index}-${layer.id}`
           const isLast = index === layers.length - 1
           return (
-            <svg key={layer.id} className={`ribbon-cell ${flow.bypassed ? 'bypassed' : ''}`} viewBox="0 0 78 170" role="img" aria-label={`${layer.name}: ${fmt(flow.inwardFluxAfter)} watts per square meter moving inward after the layer, ${fmt(flow.localOutwardReflectionFlux)} turned outward, ${fmt(flow.absorbedFlux)} absorbed`}>
-              <title>{layer.name}: {fmt(flow.inwardFluxAfter)} inward after layer · {fmt(flow.localOutwardReflectionFlux)} turns outward · {fmt(flow.absorbedFlux)} absorbed W/m²</title>
+            <svg key={layer.id} className={`ribbon-cell ${flow.bypassed ? 'bypassed' : ''}`} viewBox="0 0 92 210" role="img" aria-label={`${layer.name}: inward incident flux ${fmt(flow.incidentInwardFlux)} partitions into ${fmt(flow.transmittedInwardFlux)} transmitted inward, ${fmt(flow.reflectedOutwardFlux)} reflected outward, and ${fmt(flow.absorbedFromInwardFlux)} absorbed; outward incident flux ${fmt(flow.incidentOutwardFlux)} partitions into ${fmt(flow.transmittedOutwardFlux)} transmitted outward, ${fmt(flow.reflectedInwardFlux)} reflected inward, and ${fmt(flow.absorbedFromOutwardFlux)} absorbed, all in watts per square meter`}>
+              <title>{layer.name} — inward: {fmt(flow.incidentInwardFlux)} = {fmt(flow.transmittedInwardFlux)} transmitted + {fmt(flow.reflectedOutwardFlux)} reflected + {fmt(flow.absorbedFromInwardFlux)} absorbed. Outward: {fmt(flow.incidentOutwardFlux)} = {fmt(flow.transmittedOutwardFlux)} transmitted + {fmt(flow.reflectedInwardFlux)} reflected + {fmt(flow.absorbedFromOutwardFlux)} absorbed. All values W/m².</title>
               <defs>
                 <marker id={`${markerId}-gold`} markerWidth="20" markerHeight="20" refX="16" refY="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L20 10 L0 20 Z" className="arrow-gold" /></marker>
                 <marker id={`${markerId}-blue`} markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L14 7 L0 14 Z" className="arrow-blue" /></marker>
                 <marker id={`${markerId}-coral`} markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L14 7 L0 14 Z" className="arrow-coral" /></marker>
               </defs>
-              <path d="M-9 83 C7 83 25 83 40 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.inwardFluxBefore) }} />
-              <path d="M39 83 C54 83 70 83 87 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.inwardFluxAfter) }} markerEnd={isLast ? `url(#${markerId}-gold)` : undefined} />
-              {!flow.bypassed && flow.localOutwardReflectionFlux > 0 && <path d="M40 83 C28 69 26 39 -8 20" className="ribbon reflected" style={{ strokeWidth: reflectedWidth }} markerEnd={`url(#${markerId}-blue)`} />}
-              {!flow.bypassed && flow.absorbedFlux > 0 && <path d="M40 83 C53 101 28 124 40 158" className="ribbon absorbed" style={{ strokeWidth: absorbedWidth }} markerEnd={`url(#${markerId}-coral)`} />}
-              <circle cx="40" cy="83" r={Math.max(5, widthFor(flow.inwardFluxBefore) / 2)} className="ribbon-junction-halo" />
-              <circle cx="40" cy="83" r={Math.max(3, widthFor(flow.inwardFluxBefore) / 3.2)} className="ribbon-junction" />
-              {!flow.bypassed && flow.localOutwardReflectionFlux >= sunlight * .04 && <text x="5" y="12" textAnchor="middle" className="branch-value reflected-value">{fmt(flow.localOutwardReflectionFlux)}</text>}
-              {!flow.bypassed && flow.absorbedFlux >= sunlight * .04 && <text x="40" y="168" textAnchor="middle" className="branch-value absorbed-value">{fmt(flow.absorbedFlux)}</text>}
-              {flow.bypassed && <><rect x="22" y="66" width="36" height="34" rx="9" className="bypass-box" /><text x="40" y="56" textAnchor="middle">BYPASS</text></>}
+              <line x1="46" y1="29" x2="46" y2="169" className="partition-plane" />
+              {flow.bypassed ? (
+                <>
+                  <path d="M-8 50 L100 50" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: incidentInwardWidth }} markerEnd={isLast ? `url(#${markerId}-gold)` : undefined} />
+                  {incidentOutwardWidth > 0 && <path d="M100 116 L-8 116" className="ribbon reflected" style={{ strokeWidth: incidentOutwardWidth }} markerEnd={`url(#${markerId}-blue)`} />}
+                  <rect x="29" y="72" width="34" height="24" rx="8" className="bypass-box" />
+                  <text x="46" y="86" textAnchor="middle">BYPASS</text>
+                </>
+              ) : (
+                <>
+                  <path d="M-8 50 C10 50 29 50 46 50" className="ribbon transmitted ribbon-glow ribbon-total" style={{ strokeWidth: incidentInwardWidth }} />
+                  <path d={`M46 ${inwardSplit[0]} C58 ${inwardSplit[0]} 67 ${inwardMerge[0]} 76 ${inwardMerge[0]}`} className="ribbon transmitted ribbon-component" style={{ strokeWidth: transmittedInwardWidth }} />
+                  <path d={`M46 ${inwardSplit[1]} C30 64 31 103 14 ${outwardMerge[0]}`} className="ribbon reflected ribbon-component" style={{ strokeWidth: reflectedOutwardWidth }} />
+                  <path d={`M46 ${inwardSplit[2]} C45 88 39 139 ${absorptionMerge[0]} 166`} className="ribbon absorbed ribbon-component" style={{ strokeWidth: absorbedFromInwardWidth }} />
+
+                  {incidentOutwardWidth > 0 && <path d="M100 116 C82 116 63 116 46 116" className="ribbon reflected ribbon-total" style={{ strokeWidth: incidentOutwardWidth }} />}
+                  <path d={`M46 ${outwardSplit[0]} C62 102 61 66 76 ${inwardMerge[1]}`} className="ribbon transmitted ribbon-component" style={{ strokeWidth: reflectedInwardWidth }} />
+                  <path d={`M46 ${outwardSplit[1]} C34 ${outwardSplit[1]} 23 ${outwardMerge[1]} 14 ${outwardMerge[1]}`} className="ribbon reflected ribbon-component" style={{ strokeWidth: transmittedOutwardWidth }} />
+                  <path d={`M46 ${outwardSplit[2]} C47 137 53 148 ${absorptionMerge[1]} 166`} className="ribbon absorbed ribbon-component" style={{ strokeWidth: absorbedFromOutwardWidth }} />
+
+                  <path d="M76 50 C83 50 91 50 100 50" className="ribbon transmitted ribbon-glow ribbon-total" style={{ strokeWidth: widthFor(flow.inwardFluxAfter) }} markerEnd={isLast ? `url(#${markerId}-gold)` : undefined} />
+                  {flow.outwardFluxBefore > 0 && <path d="M14 116 C7 116 0 116 -8 116" className="ribbon reflected ribbon-total" style={{ strokeWidth: widthFor(flow.outwardFluxBefore) }} markerEnd={`url(#${markerId}-blue)`} />}
+                  {flow.absorbedFlux > 0 && <path d="M46 166 L46 201" className="ribbon absorbed ribbon-total" style={{ strokeWidth: absorbedWidth }} markerEnd={`url(#${markerId}-coral)`} />}
+
+                  <line x1="46" y1={50 - incidentInwardWidth / 2 - 2} x2="46" y2={50 + incidentInwardWidth / 2 + 2} className="partition-cut inward-cut" />
+                  {incidentOutwardWidth > 0 && <line x1="46" y1={116 - incidentOutwardWidth / 2 - 2} x2="46" y2={116 + incidentOutwardWidth / 2 + 2} className="partition-cut outward-cut" />}
+                  <text x="46" y="23" textAnchor="middle" className="split-label">INWARD SPLIT</text>
+                  {incidentOutwardWidth > 0.2 && <text x="46" y="105" textAnchor="middle" className="split-label">OUTWARD SPLIT</text>}
+                  {flow.reflectedOutwardFlux >= sunlight * .025 && <text x="13" y="91" textAnchor="middle" className="branch-value reflected-value">{fmt(flow.reflectedOutwardFlux)}</text>}
+                  {flow.reflectedInwardFlux >= sunlight * .025 && <text x="79" y="91" textAnchor="middle" className="branch-value inward-value">{fmt(flow.reflectedInwardFlux)}</text>}
+                  {flow.absorbedFlux >= sunlight * .025 && <text x="46" y="209" textAnchor="middle" className="branch-value absorbed-value">{fmt(flow.absorbedFlux)}</text>}
+                </>
+              )}
             </svg>
           )
         })}

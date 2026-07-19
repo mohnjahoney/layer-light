@@ -35,7 +35,7 @@ The UI must expose assumptions and avoid suggesting that the result includes edg
 ## Visual output
 
 - A physical stack view with temperatures and heat-flow direction.
-- An optional, expanded shortwave energy-flow mode aligned with the physical stack. Bold curved ribbons and arrowheads show energy moving inward, reflecting outdoors, or being absorbed at each layer.
+- An optional, expanded shortwave energy-flow mode aligned with the physical stack. Each layer is a two-junction Sankey partition: inward and outward incident ribbons meet the layer plane, divide into transmitted, reflected, and absorbed branches, then merge into the adjacent interface fluxes. Ribbon widths are proportional to flux.
 - A compact energy-flow visualization showing reflected energy, solar energy reaching the room, heat from absorbed sunlight reaching the room, and energy rejected outdoors.
 - Summary metrics for total room heat gain and effective R-value.
 - Plain-language comparison cues and model notes.
