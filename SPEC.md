@@ -35,7 +35,9 @@ The UI must expose assumptions and avoid suggesting that the result includes edg
 ## Visual output
 
 - A physical stack view with temperatures and heat-flow direction.
-- An optional, expanded shortwave energy-flow mode aligned with the physical stack. Each layer is a two-junction Sankey partition: inward and outward incident ribbons meet the layer plane, divide into transmitted, reflected, and absorbed branches, then merge into the adjacent interface fluxes. Ribbon widths are proportional to flux.
+- A mode switcher selects the visualization without changing the underlying assembly. **Stack** shows the physical layers alone; **Steady state** shows the continuous solved fluxes; additional modes can be added without changing the solver-to-view-model boundary.
+- In Steady state mode, each layer is a two-junction Sankey partition: inward and outward incident ribbons meet the layer plane, divide into transmitted, reflected, and absorbed branches, then merge into the adjacent interface fluxes. Ribbon widths are proportional to flux.
+- A planned **Pulse** mode will launch a finite shortwave packet and animate successive transmission, reflection, and absorption events through the same stack. It will show a time sequence rather than the analytically summed steady-state totals.
 - A compact energy-flow visualization showing reflected energy, solar energy reaching the room, heat from absorbed sunlight reaching the room, and energy rejected outdoors.
 - Summary metrics for total room heat gain and effective R-value.
 - Plain-language comparison cues and model notes.
@@ -43,7 +45,7 @@ The UI must expose assumptions and avoid suggesting that the result includes edg
 ## Later levels
 
 1. Split radiation into shortwave solar and longwave thermal bands with independent material properties.
-2. Add transient heating, thermal mass, angle of incidence, and saved side-by-side scenarios.
+2. Add the animated radiation-pulse mode, transient heating, thermal mass, angle of incidence, and saved side-by-side scenarios.
 3. Validate selected assemblies against a more complete numerical or reference model.
 
 ## Deployment

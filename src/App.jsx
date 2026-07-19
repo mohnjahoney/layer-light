@@ -170,7 +170,7 @@ export default function App() {
   const [layers, setLayers] = useState(INITIAL)
   const [selectedId, setSelectedId] = useState(INITIAL[0].id)
   const [settings, setSettings] = useState({ sunlight: 700, outdoorTemp: 32, indoorTemp: 22 })
-  const [flowVisible, setFlowVisible] = useState(true)
+  const [visualizationMode, setVisualizationMode] = useState('steady')
   const [dragUi, setDragUi] = useState({ holdingId: null, draggingId: null })
   const dragTimer = useRef(null)
   const dragState = useRef(null)
@@ -286,10 +286,18 @@ export default function App() {
             <button className="reset" onClick={() => { const fresh = [newLayer('glass'), newLayer('air'), newLayer('glass'), newLayer('curtain')]; setLayers(fresh); setSelectedId(fresh[0].id) }}>Reset example</button>
           </aside>
 
-          <section className={`stack-panel card ${flowVisible ? 'flow-expanded' : 'flow-collapsed'}`}>
-            <div className="stack-labels"><span>OUTDOORS</span><button className="flow-toggle" aria-pressed={flowVisible} onClick={() => setFlowVisible((visible) => !visible)}><i /> Energy flow</button><span>ROOM</span></div>
+          <section className={`stack-panel card ${visualizationMode === 'stack' ? 'flow-collapsed' : 'flow-expanded'}`}>
+            <div className="stack-labels">
+              <span>OUTDOORS</span>
+              <div className="mode-switcher" role="group" aria-label="Visualization mode">
+                <button aria-pressed={visualizationMode === 'stack'} onClick={() => setVisualizationMode('stack')}>Stack</button>
+                <button aria-pressed={visualizationMode === 'steady'} onClick={() => setVisualizationMode('steady')}>Steady state</button>
+                <button disabled aria-disabled="true">Pulse <small>next</small></button>
+              </div>
+              <span>ROOM</span>
+            </div>
             <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} W/m² incident</b></div>
-            {flowVisible && <EnergyRibbons layers={layers} flows={result.layerFlows} sunlight={settings.sunlight} />}
+            {visualizationMode === 'steady' && <EnergyRibbons layers={layers} flows={result.layerFlows} sunlight={settings.sunlight} />}
             <div className={`layer-stack ${dragUi.draggingId ? 'stack-is-dragging' : ''}`}>
               {layers.length === 0 && <div className="empty-state">Add a material to begin</div>}
               {layers.map((layer, index) => (
