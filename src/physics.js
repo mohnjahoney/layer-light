@@ -98,8 +98,8 @@ function solveTemperatures(resistances, sources, outside, inside) {
 export function solveShortwave(layers, incident) {
   const count = layers.length
   const suffixReflectance = Array(count + 1).fill(0)
-  const forward = Array(count + 1).fill(0)
-  const backward = Array(count + 1).fill(0)
+  const inwardFluxes = Array(count + 1).fill(0)
+  const outwardFluxes = Array(count + 1).fill(0)
   const EPSILON = 1e-12
 
   for (let index = count - 1; index >= 0; index -= 1) {
@@ -111,43 +111,76 @@ export function solveShortwave(layers, incident) {
     suffixReflectance[index] = Math.min(1, Math.max(0, layer.reflectance + returned))
   }
 
-  forward[0] = Math.max(0, incident)
+  inwardFluxes[0] = Math.max(0, incident)
   for (let index = 0; index < count; index += 1) {
     const layer = layers[index]
     const denominator = 1 - layer.reflectance * suffixReflectance[index + 1]
-    forward[index + 1] = denominator > EPSILON
-      ? layer.transmittance * forward[index] / denominator
+    inwardFluxes[index + 1] = denominator > EPSILON
+      ? layer.transmittance * inwardFluxes[index] / denominator
       : 0
   }
 
   for (let index = count - 1; index >= 0; index -= 1) {
     const layer = layers[index]
-    backward[index] = layer.reflectance * forward[index] + layer.transmittance * backward[index + 1]
+    outwardFluxes[index] = layer.reflectance * inwardFluxes[index] + layer.transmittance * outwardFluxes[index + 1]
   }
 
-  const absorbed = layers.map((layer, index) => layer.absorptance * (forward[index] + backward[index + 1]))
-  const byLayer = layers.map((layer, index) => ({
-    incoming: forward[index],
-    forwardIn: forward[index],
-    backwardIn: backward[index + 1],
-    transmitted: forward[index + 1],
-    backward: backward[index],
-    reflected: layer.reflectance * forward[index],
-    reReflected: layer.reflectance * backward[index + 1],
-    forwardTransmission: layer.transmittance * forward[index],
-    backwardTransmission: layer.transmittance * backward[index + 1],
-    absorbed: absorbed[index],
-    bypassed: false,
+  const interfaces = inwardFluxes.map((inwardFlux, index) => ({
+    index,
+    inwardFlux,
+    outwardFlux: outwardFluxes[index],
+    netInwardFlux: inwardFlux - outwardFluxes[index],
   }))
+  const layerInteractions = layers.map((layer, index) => {
+    const absorbedFromInward = layer.absorptance * inwardFluxes[index]
+    const absorbedFromOutward = layer.absorptance * outwardFluxes[index + 1]
+    return {
+      layerId: layer.id,
+      incidentFlux: {
+        inward: inwardFluxes[index],
+        outward: outwardFluxes[index + 1],
+      },
+      reflectedFlux: {
+        inward: layer.reflectance * outwardFluxes[index + 1],
+        outward: layer.reflectance * inwardFluxes[index],
+      },
+      transmittedFlux: {
+        inward: layer.transmittance * inwardFluxes[index],
+        outward: layer.transmittance * outwardFluxes[index + 1],
+      },
+      absorbedFlux: {
+        fromInward: absorbedFromInward,
+        fromOutward: absorbedFromOutward,
+        total: absorbedFromInward + absorbedFromOutward,
+      },
+    }
+  })
+  const totalAbsorbedFlux = layerInteractions.reduce((sum, interaction) => sum + interaction.absorbedFlux.total, 0)
+  const incidentInwardFlux = inwardFluxes[0] ?? Math.max(0, incident)
+  const escapingOutwardFlux = outwardFluxes[0] ?? 0
+  const enteringInwardFlux = inwardFluxes[count] ?? incidentInwardFlux
+  const energyBalanceResidual = incidentInwardFlux - escapingOutwardFlux - enteringInwardFlux - totalAbsorbedFlux
 
   return {
-    byLayer,
-    forward,
-    backward,
-    absorbed,
-    reflected: backward[0] ?? 0,
-    transmitted: forward[count] ?? incident,
-    suffixReflectance,
+    interfaces,
+    layerInteractions,
+    boundaries: {
+      outdoors: {
+        incidentInwardFlux,
+        escapingOutwardFlux,
+      },
+      room: {
+        enteringInwardFlux,
+        incidentOutwardFlux: outwardFluxes[count] ?? 0,
+      },
+    },
+    totals: {
+      absorbedFlux: totalAbsorbedFlux,
+      energyBalanceResidual,
+      relativeEnergyBalanceResidual: incidentInwardFlux > 0
+        ? energyBalanceResidual / incidentInwardFlux
+        : 0,
+    },
   }
 }
 
@@ -159,54 +192,34 @@ export function solveSystem(layers, settings) {
   const resistances = activeLayers.map((layer, i) => layerResistance(layer, i, activeLayers, meanK))
 
   const shortwave = solveShortwave(activeLayers, settings.sunlight)
-  const activeFlowById = new Map(activeLayers.map((layer, index) => [layer.id, shortwave.byLayer[index]]))
-  let activeIndex = 0
-  const solarByLayer = layers.map((layer) => {
-    if (layer.enabled !== false) {
-      const flow = activeFlowById.get(layer.id)
-      activeIndex += 1
-      return flow
-    }
-    return {
-      incoming: shortwave.forward[activeIndex],
-      forwardIn: shortwave.forward[activeIndex],
-      backwardIn: shortwave.backward[activeIndex],
-      transmitted: shortwave.forward[activeIndex],
-      backward: shortwave.backward[activeIndex],
-      reflected: 0,
-      reReflected: 0,
-      forwardTransmission: shortwave.forward[activeIndex],
-      backwardTransmission: shortwave.backward[activeIndex],
-      absorbed: 0,
-      bypassed: true,
-    }
-  })
-  const absorbed = shortwave.absorbed
+  const absorbed = shortwave.layerInteractions.map((interaction) => interaction.absorbedFlux.total)
 
   const activeTemperatures = solveTemperatures(resistances, absorbed, outside, inside)
-  const temperatureById = new Map(activeLayers.map((layer, index) => [layer.id, activeTemperatures[index]]))
-  const temperatures = layers.map((layer) => layer.enabled === false ? null : temperatureById.get(layer.id))
   const baselineTemperatures = solveTemperatures(resistances, activeLayers.map(() => 0), outside, inside)
   const boundaryIn = activeLayers.length ? 1 / 8 + resistances.at(-1) / 2 : 1 / 8 + 1 / 20
   const inwardThermal = activeLayers.length ? (activeTemperatures.at(-1) - inside) / boundaryIn : (outside - inside) / boundaryIn
   const baseline = activeLayers.length ? (baselineTemperatures.at(-1) - inside) / boundaryIn : inwardThermal
   const absorbedToRoom = inwardThermal - baseline
-  const totalGain = shortwave.transmitted + inwardThermal
-  const rejected = Math.max(0, settings.sunlight - shortwave.reflected - shortwave.transmitted - absorbedToRoom)
+  const roomInwardFlux = shortwave.boundaries.room.enteringInwardFlux + inwardThermal
   const totalR = 1 / 20 + resistances.reduce((sum, r) => sum + r, 0) + 1 / 8
 
   return {
-    temperatures,
-    solarByLayer,
-    resistances,
-    totalR,
-    reflected: shortwave.reflected,
-    directSolar: shortwave.transmitted,
-    shortwaveForward: shortwave.forward,
-    shortwaveBackward: shortwave.backward,
-    absorbedToRoom,
-    baseline,
-    totalGain,
-    rejected,
+    activeLayerIds: activeLayers.map((layer) => layer.id),
+    shortwave,
+    thermal: {
+      layerTemperatures: activeLayers.map((layer, index) => ({
+        layerId: layer.id,
+        temperature: activeTemperatures[index],
+      })),
+      layerResistances: activeLayers.map((layer, index) => ({
+        layerId: layer.id,
+        resistance: resistances[index],
+      })),
+      totalResistance: totalR,
+      inwardFlux: inwardThermal,
+      baselineInwardFlux: baseline,
+      solarDrivenInwardFlux: absorbedToRoom,
+    },
+    roomInwardFlux,
   }
 }

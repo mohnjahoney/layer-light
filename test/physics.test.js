@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { solveShortwave, solveSystem } from '../src/physics.js'
+import { createFlowViewModel } from '../src/flowViewModel.js'
 
 const layer = (overrides = {}) => ({
   id: crypto.randomUUID(),
@@ -23,9 +24,9 @@ test('two reflective layers include the infinite reflection series', () => {
   const result = solveShortwave([layer(), layer()], 1000)
   const cavityDenominator = 1 - 0.3 * 0.3
 
-  closeTo(result.forward[1], 600 / cavityDenominator)
-  closeTo(result.transmitted, 360 / cavityDenominator)
-  assert.ok(result.transmitted > 360, 'returned light should be reflected toward the room again')
+  closeTo(result.interfaces[1].inwardFlux, 600 / cavityDenominator)
+  closeTo(result.boundaries.room.enteringInwardFlux, 360 / cavityDenominator)
+  assert.ok(result.boundaries.room.enteringInwardFlux > 360, 'returned light should be reflected toward the room again')
 })
 
 test('reflected, transmitted, and absorbed energy are conserved', () => {
@@ -34,15 +35,18 @@ test('reflected, transmitted, and absorbed energy are conserved', () => {
     layer({ transmittance: 0.55, reflectance: 0.38, absorptance: 0.07 }),
     layer({ transmittance: 0.05, reflectance: 0.45, absorptance: 0.50 }),
   ], 700)
-  const accounted = result.reflected + result.transmitted + result.absorbed.reduce((sum, value) => sum + value, 0)
+  const accounted = result.boundaries.outdoors.escapingOutwardFlux
+    + result.boundaries.room.enteringInwardFlux
+    + result.layerInteractions.reduce((sum, interaction) => sum + interaction.absorbedFlux.total, 0)
   closeTo(accounted, 700, 1e-7)
+  closeTo(result.totals.energyBalanceResidual, 0, 1e-7)
 })
 
 test('a single layer matches the direct optical fractions', () => {
   const result = solveShortwave([layer()], 1000)
-  closeTo(result.reflected, 300)
-  closeTo(result.transmitted, 600)
-  closeTo(result.absorbed[0], 100)
+  closeTo(result.boundaries.outdoors.escapingOutwardFlux, 300)
+  closeTo(result.boundaries.room.enteringInwardFlux, 600)
+  closeTo(result.layerInteractions[0].absorbedFlux.total, 100)
 })
 
 test('disabled layers are excluded from the optical solution', () => {
@@ -51,19 +55,19 @@ test('disabled layers are excluded from the optical solution', () => {
   const settings = { sunlight: 1000, outdoorTemp: 20, indoorTemp: 20 }
   const result = solveSystem([active, disabled], settings)
 
-  closeTo(result.directSolar, 600)
-  closeTo(result.reflected, 300)
-  assert.equal(result.solarByLayer[1].bypassed, true)
+  closeTo(result.shortwave.boundaries.room.enteringInwardFlux, 600)
+  closeTo(result.shortwave.boundaries.outdoors.escapingOutwardFlux, 300)
+  assert.deepEqual(result.activeLayerIds, ['active'])
+  assert.equal(createFlowViewModel([active, disabled], result).layerFlows[1].bypassed, true)
 })
 
 test('perfect reflectors remain finite without an iteration cutoff', () => {
   const mirror = layer({ transmittance: 0, reflectance: 1, absorptance: 0 })
   const result = solveShortwave([mirror, mirror], 1000)
 
-  closeTo(result.reflected, 1000)
-  closeTo(result.transmitted, 0)
-  assert.ok(result.forward.every(Number.isFinite))
-  assert.ok(result.backward.every(Number.isFinite))
+  closeTo(result.boundaries.outdoors.escapingOutwardFlux, 1000)
+  closeTo(result.boundaries.room.enteringInwardFlux, 0)
+  assert.ok(result.interfaces.every(({ inwardFlux, outwardFlux }) => Number.isFinite(inwardFlux) && Number.isFinite(outwardFlux)))
 })
 
 test('energy is conserved across ten representative layer assemblies', async (testContext) => {
@@ -89,10 +93,13 @@ test('energy is conserved across ten representative layer assemblies', async (te
   for (const scenario of cases) {
     await testContext.test(scenario.name, () => {
       const result = solveSystem(scenario.layers, { sunlight: scenario.incident, outdoorTemp: 31, indoorTemp: 22 })
-      const absorbed = scenario.layers.reduce((sum, currentLayer, index) => (
-        currentLayer.enabled === false ? sum : sum + result.solarByLayer[index].absorbed
-      ), 0)
-      const accounted = result.reflected + absorbed + result.directSolar
+      const absorbed = result.shortwave.layerInteractions.reduce(
+        (sum, interaction) => sum + interaction.absorbedFlux.total,
+        0,
+      )
+      const accounted = result.shortwave.boundaries.outdoors.escapingOutwardFlux
+        + absorbed
+        + result.shortwave.boundaries.room.enteringInwardFlux
       const error = Math.abs(accounted - scenario.incident)
       const tolerance = Math.max(1e-9, scenario.incident * 1e-10)
       if (error > largestError) {
@@ -101,7 +108,12 @@ test('energy is conserved across ten representative layer assemblies', async (te
       }
 
       assert.ok(Number.isFinite(accounted), 'the energy total must be finite')
-      assert.ok(result.reflected >= 0 && result.directSolar >= 0 && absorbed >= 0, 'all energy destinations must be nonnegative')
+      assert.ok(
+        result.shortwave.boundaries.outdoors.escapingOutwardFlux >= 0
+          && result.shortwave.boundaries.room.enteringInwardFlux >= 0
+          && absorbed >= 0,
+        'all energy destinations must be nonnegative',
+      )
       assert.ok(error <= tolerance, `${accounted} W/m² accounted for ${scenario.incident} W/m² incident; error ${error} exceeded ${tolerance}`)
     })
   }

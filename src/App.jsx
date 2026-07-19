@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MATERIALS, newLayer, solveSystem } from './physics.js'
+import { createFlowViewModel } from './flowViewModel.js'
 
 const INITIAL = [newLayer('glass'), newLayer('air'), newLayer('glass'), newLayer('curtain')]
 
@@ -61,10 +62,10 @@ function NumberField({ label, value, unit, min = 0, max, step = 0.01, onChange }
 
 function EnergyBar({ result, sunlight }) {
   const values = [
-    { label: 'Reflected', value: result.reflected, color: '#82aeb5' },
-    { label: 'Direct solar', value: result.directSolar, color: '#f1b94d' },
-    { label: 'Absorbed → room', value: Math.max(0, result.absorbedToRoom), color: '#df7558' },
-    { label: 'Rejected outdoors', value: result.rejected, color: '#4e7477' },
+    { label: 'Escapes outward', value: result.escapedOutwardFlux, color: '#82aeb5' },
+    { label: 'Enters room', value: result.enteringRoomShortwaveFlux, color: '#f1b94d' },
+    { label: 'Absorbed → room', value: Math.max(0, result.absorbedToRoomFlux), color: '#df7558' },
+    { label: 'Absorbed → outdoors', value: result.absorbedToOutdoorsFlux, color: '#4e7477' },
   ]
   return (
     <div className="energy-viz">
@@ -84,32 +85,32 @@ function EnergyRibbons({ layers, flows, sunlight }) {
     <div className="ribbon-viz">
       <div className="ribbon-heading">
         <div><p className="eyebrow">Solar journey</p><h3>Follow the energy</h3></div>
-        <div className="ribbon-arrival"><span>arrives in room</span><strong>{fmt(flows.at(-1)?.transmitted ?? sunlight)} W/m²</strong></div>
+        <div className="ribbon-arrival"><span>arrives in room</span><strong>{fmt(flows.at(-1)?.inwardFluxAfter ?? sunlight)} W/m²</strong></div>
       </div>
       <div className="ribbon-legend"><span><i className="transmitted" />Moving inward</span><span><i className="reflected" />Turns outward</span><span><i className="absorbed" />Held by layer</span></div>
       <div className="ribbon-track" style={{ gridTemplateColumns: `repeat(${Math.max(layers.length, 1)}, 78px)` }} aria-label="Shortwave solar energy flow through layers">
         {layers.map((layer, index) => {
           const flow = flows[index]
-          const reflectedWidth = widthFor(flow.reflected, 17)
-          const absorbedWidth = widthFor(flow.absorbed, 17)
+          const reflectedWidth = widthFor(flow.localOutwardReflectionFlux, 17)
+          const absorbedWidth = widthFor(flow.absorbedFlux, 17)
           const markerId = `arrow-${index}-${layer.id}`
           const isLast = index === layers.length - 1
           return (
-            <svg key={layer.id} className={`ribbon-cell ${flow.bypassed ? 'bypassed' : ''}`} viewBox="0 0 78 170" role="img" aria-label={`${layer.name}: ${fmt(flow.transmitted)} watts per square meter transmitted, ${fmt(flow.reflected)} reflected, ${fmt(flow.absorbed)} absorbed`}>
-              <title>{layer.name}: {fmt(flow.transmitted)} transmitted · {fmt(flow.reflected)} reflected · {fmt(flow.absorbed)} absorbed W/m²</title>
+            <svg key={layer.id} className={`ribbon-cell ${flow.bypassed ? 'bypassed' : ''}`} viewBox="0 0 78 170" role="img" aria-label={`${layer.name}: ${fmt(flow.inwardFluxAfter)} watts per square meter moving inward after the layer, ${fmt(flow.localOutwardReflectionFlux)} turned outward, ${fmt(flow.absorbedFlux)} absorbed`}>
+              <title>{layer.name}: {fmt(flow.inwardFluxAfter)} inward after layer · {fmt(flow.localOutwardReflectionFlux)} turns outward · {fmt(flow.absorbedFlux)} absorbed W/m²</title>
               <defs>
                 <marker id={`${markerId}-gold`} markerWidth="20" markerHeight="20" refX="16" refY="10" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L20 10 L0 20 Z" className="arrow-gold" /></marker>
                 <marker id={`${markerId}-blue`} markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L14 7 L0 14 Z" className="arrow-blue" /></marker>
                 <marker id={`${markerId}-coral`} markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L14 7 L0 14 Z" className="arrow-coral" /></marker>
               </defs>
-              <path d="M-9 83 C7 83 25 83 40 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.incoming) }} />
-              <path d="M39 83 C54 83 70 83 87 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.transmitted) }} markerEnd={isLast ? `url(#${markerId}-gold)` : undefined} />
-              {!flow.bypassed && flow.reflected > 0 && <path d="M40 83 C28 69 26 39 -8 20" className="ribbon reflected" style={{ strokeWidth: reflectedWidth }} markerEnd={`url(#${markerId}-blue)`} />}
-              {!flow.bypassed && flow.absorbed > 0 && <path d="M40 83 C53 101 28 124 40 158" className="ribbon absorbed" style={{ strokeWidth: absorbedWidth }} markerEnd={`url(#${markerId}-coral)`} />}
-              <circle cx="40" cy="83" r={Math.max(5, widthFor(flow.incoming) / 2)} className="ribbon-junction-halo" />
-              <circle cx="40" cy="83" r={Math.max(3, widthFor(flow.incoming) / 3.2)} className="ribbon-junction" />
-              {!flow.bypassed && flow.reflected >= sunlight * .04 && <text x="5" y="12" textAnchor="middle" className="branch-value reflected-value">{fmt(flow.reflected)}</text>}
-              {!flow.bypassed && flow.absorbed >= sunlight * .04 && <text x="40" y="168" textAnchor="middle" className="branch-value absorbed-value">{fmt(flow.absorbed)}</text>}
+              <path d="M-9 83 C7 83 25 83 40 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.inwardFluxBefore) }} />
+              <path d="M39 83 C54 83 70 83 87 83" className="ribbon transmitted ribbon-glow" style={{ strokeWidth: widthFor(flow.inwardFluxAfter) }} markerEnd={isLast ? `url(#${markerId}-gold)` : undefined} />
+              {!flow.bypassed && flow.localOutwardReflectionFlux > 0 && <path d="M40 83 C28 69 26 39 -8 20" className="ribbon reflected" style={{ strokeWidth: reflectedWidth }} markerEnd={`url(#${markerId}-blue)`} />}
+              {!flow.bypassed && flow.absorbedFlux > 0 && <path d="M40 83 C53 101 28 124 40 158" className="ribbon absorbed" style={{ strokeWidth: absorbedWidth }} markerEnd={`url(#${markerId}-coral)`} />}
+              <circle cx="40" cy="83" r={Math.max(5, widthFor(flow.inwardFluxBefore) / 2)} className="ribbon-junction-halo" />
+              <circle cx="40" cy="83" r={Math.max(3, widthFor(flow.inwardFluxBefore) / 3.2)} className="ribbon-junction" />
+              {!flow.bypassed && flow.localOutwardReflectionFlux >= sunlight * .04 && <text x="5" y="12" textAnchor="middle" className="branch-value reflected-value">{fmt(flow.localOutwardReflectionFlux)}</text>}
+              {!flow.bypassed && flow.absorbedFlux >= sunlight * .04 && <text x="40" y="168" textAnchor="middle" className="branch-value absorbed-value">{fmt(flow.absorbedFlux)}</text>}
               {flow.bypassed && <><rect x="22" y="66" width="36" height="34" rx="9" className="bypass-box" /><text x="40" y="56" textAnchor="middle">BYPASS</text></>}
             </svg>
           )
@@ -127,7 +128,8 @@ export default function App() {
   const [dragUi, setDragUi] = useState({ holdingId: null, draggingId: null })
   const dragTimer = useRef(null)
   const dragState = useRef(null)
-  const result = useMemo(() => solveSystem(layers, settings), [layers, settings])
+  const solution = useMemo(() => solveSystem(layers, settings), [layers, settings])
+  const result = useMemo(() => createFlowViewModel(layers, solution), [layers, solution])
   const selected = layers.find((layer) => layer.id === selectedId)
 
   useEffect(() => () => clearTimeout(dragTimer.current), [])
@@ -241,7 +243,7 @@ export default function App() {
           <section className={`stack-panel card ${flowVisible ? 'flow-expanded' : 'flow-collapsed'}`}>
             <div className="stack-labels"><span>OUTDOORS</span><button className="flow-toggle" aria-pressed={flowVisible} onClick={() => setFlowVisible((visible) => !visible)}><i /> Energy flow</button><span>ROOM</span></div>
             <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} W/m² incident</b></div>
-            {flowVisible && <EnergyRibbons layers={layers} flows={result.solarByLayer} sunlight={settings.sunlight} />}
+            {flowVisible && <EnergyRibbons layers={layers} flows={result.layerFlows} sunlight={settings.sunlight} />}
             <div className={`layer-stack ${dragUi.draggingId ? 'stack-is-dragging' : ''}`}>
               {layers.length === 0 && <div className="empty-state">Add a material to begin</div>}
               {layers.map((layer, index) => (
@@ -261,11 +263,11 @@ export default function App() {
             <div className={`drag-status ${dragUi.holdingId ? 'is-holding' : ''} ${dragUi.draggingId ? 'is-moving' : ''}`} aria-live="polite">
               {dragUi.holdingId ? 'Keep holding…' : dragUi.draggingId ? 'Movable — drag to a new position, then release' : 'Hold the grip for half a second to move a layer'}
             </div>
-            <div className="heat-arrow"><span>Net room heat</span><i className={result.totalGain < 0 ? 'reverse' : ''} /><strong>{fmt(Math.abs(result.totalGain))} W/m² {result.totalGain >= 0 ? 'in' : 'out'}</strong></div>
+            <div className="heat-arrow"><span>Net room heat</span><i className={result.roomInwardFlux < 0 ? 'reverse' : ''} /><strong>{fmt(Math.abs(result.roomInwardFlux))} W/m² {result.roomInwardFlux >= 0 ? 'in' : 'out'}</strong></div>
             <div className="metric-row">
-              <div><span>Total room heat gain</span><strong>{fmt(result.totalGain)} <small>W/m²</small></strong></div>
-              <div><span>Assembly R-value</span><strong>{fmt(result.totalR, 2)} <small>m²K/W</small></strong></div>
-              <div><span>Direct solar</span><strong>{fmt(result.directSolar)} <small>W/m²</small></strong></div>
+              <div><span>Total room heat gain</span><strong>{fmt(result.roomInwardFlux)} <small>W/m²</small></strong></div>
+              <div><span>Assembly R-value</span><strong>{fmt(result.totalResistance, 2)} <small>m²K/W</small></strong></div>
+              <div><span>Direct solar</span><strong>{fmt(result.enteringRoomShortwaveFlux)} <small>W/m²</small></strong></div>
             </div>
           </section>
 
