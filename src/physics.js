@@ -31,6 +31,15 @@ export function newLayer(type) {
   return { ...MATERIALS[type], type, enabled: true, id: `${type}-${crypto.randomUUID()}` }
 }
 
+export function partitionShortwave(layer, incidentEnergy) {
+  const incident = Math.max(0, incidentEnergy)
+  return {
+    transmitted: layer.transmittance * incident,
+    reflected: layer.reflectance * incident,
+    absorbed: layer.absorptance * incident,
+  }
+}
+
 function gapResistance(layer, leftE, rightE, meanK) {
   const d = Math.max(layer.thickness / 1000, 0.0005)
   const e1 = Math.max(leftE ?? 0.84, 0.02)
@@ -132,8 +141,8 @@ export function solveShortwave(layers, incident) {
     netInwardFlux: inwardFlux - outwardFluxes[index],
   }))
   const layerInteractions = layers.map((layer, index) => {
-    const absorbedFromInward = layer.absorptance * inwardFluxes[index]
-    const absorbedFromOutward = layer.absorptance * outwardFluxes[index + 1]
+    const inwardPartition = partitionShortwave(layer, inwardFluxes[index])
+    const outwardPartition = partitionShortwave(layer, outwardFluxes[index + 1])
     return {
       layerId: layer.id,
       incidentFlux: {
@@ -141,17 +150,17 @@ export function solveShortwave(layers, incident) {
         outward: outwardFluxes[index + 1],
       },
       reflectedFlux: {
-        inward: layer.reflectance * outwardFluxes[index + 1],
-        outward: layer.reflectance * inwardFluxes[index],
+        inward: outwardPartition.reflected,
+        outward: inwardPartition.reflected,
       },
       transmittedFlux: {
-        inward: layer.transmittance * inwardFluxes[index],
-        outward: layer.transmittance * outwardFluxes[index + 1],
+        inward: inwardPartition.transmitted,
+        outward: outwardPartition.transmitted,
       },
       absorbedFlux: {
-        fromInward: absorbedFromInward,
-        fromOutward: absorbedFromOutward,
-        total: absorbedFromInward + absorbedFromOutward,
+        fromInward: inwardPartition.absorbed,
+        fromOutward: outwardPartition.absorbed,
+        total: inwardPartition.absorbed + outwardPartition.absorbed,
       },
     }
   })

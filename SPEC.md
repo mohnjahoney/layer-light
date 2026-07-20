@@ -32,12 +32,20 @@ The first version is an explanatory comparison tool, not a building-code or engi
 
 The UI must expose assumptions and avoid suggesting that the result includes edge effects, coherent wave interference, spectral detail, angle of incidence, airflow around curtains, or transient thermal mass.
 
+## Pulse sequence model
+
+- A finite incident pulse is measured as energy per area in J/m², not steady flux in W/m².
+- The pulse solver emits renderer-neutral propagation records, chronological split events, absorption events, and boundary arrivals. Every descendant retains its parent pulse ID.
+- Event times use layer positions derived from the active stack thicknesses and a configurable propagation speed. Playback speed is a future presentation concern and does not alter these physical event times.
+- Each split reuses the same shortwave transmittance, reflectance, and absorptance partition as the steady-state solver.
+- Expansion can stop at an energy threshold, time horizon, or safety event limit. Unexpanded energy is reported explicitly as unresolved energy and remains part of the conservation balance.
+
 ## Visual output
 
 - A physical stack view with temperatures and heat-flow direction.
 - A mode switcher selects the visualization without changing the underlying assembly. **Stack** shows the physical layers alone; **Steady state** shows the continuous solved fluxes; additional modes can be added without changing the solver-to-view-model boundary.
 - In Steady state mode, each layer is a two-junction Sankey partition: inward and outward incident ribbons meet the layer plane, divide into transmitted, reflected, and absorbed branches, then merge into the adjacent interface fluxes. Ribbon widths are proportional to flux.
-- A planned **Pulse** mode will launch a finite shortwave packet and animate successive transmission, reflection, and absorption events through the same stack. It will show a time sequence rather than the analytically summed steady-state totals.
+- A planned **Pulse** renderer will animate the computed finite-pulse sequence through the stack. It will show causal events rather than the analytically summed steady-state totals.
 - A compact energy-flow visualization showing reflected energy, solar energy reaching the room, heat from absorbed sunlight reaching the room, and energy rejected outdoors.
 - Summary metrics for total room heat gain and effective R-value.
 - Plain-language comparison cues and model notes.
