@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MATERIALS, newLayer, solveSystem } from './physics.js'
 import { createFlowViewModel } from './flowViewModel.js'
+import { solvePulseSequence } from './pulse.js'
+import { PulseVisualization } from './PulseVisualization.jsx'
 
 const INITIAL = [newLayer('glass'), newLayer('air'), newLayer('glass'), newLayer('curtain')]
 
@@ -176,6 +178,12 @@ export default function App() {
   const dragState = useRef(null)
   const solution = useMemo(() => solveSystem(layers, settings), [layers, settings])
   const result = useMemo(() => createFlowViewModel(layers, solution), [layers, solution])
+  const pulseSequence = useMemo(
+    () => solvePulseSequence(layers, settings.sunlight, {
+      energyThreshold: Math.max(0.001, settings.sunlight * 0.005),
+    }),
+    [layers, settings.sunlight],
+  )
   const selected = layers.find((layer) => layer.id === selectedId)
 
   useEffect(() => () => clearTimeout(dragTimer.current), [])
@@ -262,7 +270,7 @@ export default function App() {
     <div className="app-shell">
       <header>
         <div className="brand"><span className="brand-mark"><i /><i /><i /></span><div><h1>Layer Light</h1><p>Window heat-flow sketchbook</p></div></div>
-        <div className="model-pill"><span /> Steady-state model</div>
+        <div className="model-pill"><span /> {visualizationMode === 'pulse' ? 'Pulse optics model' : 'Steady-state model'}</div>
       </header>
 
       <main>
@@ -292,12 +300,13 @@ export default function App() {
               <div className="mode-switcher" role="group" aria-label="Visualization mode">
                 <button aria-pressed={visualizationMode === 'stack'} onClick={() => setVisualizationMode('stack')}>Stack</button>
                 <button aria-pressed={visualizationMode === 'steady'} onClick={() => setVisualizationMode('steady')}>Steady state</button>
-                <button disabled aria-disabled="true">Pulse <small>next</small></button>
+                <button aria-pressed={visualizationMode === 'pulse'} onClick={() => setVisualizationMode('pulse')}>Pulse</button>
               </div>
               <span>ROOM</span>
             </div>
-            <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} W/m² incident</b></div>
+            <div className="sun-line"><span>☀</span><i /><b>{fmt(settings.sunlight)} {visualizationMode === 'pulse' ? 'J/m² pulse' : 'W/m² incident'}</b></div>
             {visualizationMode === 'steady' && <EnergyRibbons layers={layers} flows={result.layerFlows} sunlight={settings.sunlight} />}
+            {visualizationMode === 'pulse' && <PulseVisualization layers={layers} sequence={pulseSequence} pulseEnergy={settings.sunlight} />}
             <div className={`layer-stack ${dragUi.draggingId ? 'stack-is-dragging' : ''}`}>
               {layers.length === 0 && <div className="empty-state">Add a material to begin</div>}
               {layers.map((layer, index) => (

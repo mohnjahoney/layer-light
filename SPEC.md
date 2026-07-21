@@ -45,7 +45,8 @@ The UI must expose assumptions and avoid suggesting that the result includes edg
 - A physical stack view with temperatures and heat-flow direction.
 - A mode switcher selects the visualization without changing the underlying assembly. **Stack** shows the physical layers alone; **Steady state** shows the continuous solved fluxes; additional modes can be added without changing the solver-to-view-model boundary.
 - In Steady state mode, each layer is a two-junction Sankey partition: inward and outward incident ribbons meet the layer plane, divide into transmitted, reflected, and absorbed branches, then merge into the adjacent interface fluxes. Ribbon widths are proportional to flux.
-- A planned **Pulse** renderer will animate the computed finite-pulse sequence through the stack. It will show causal events rather than the analytically summed steady-state totals.
+- **Pulse** mode animates the computed causal sequence without grouping. The initial ribbon owns the full vertical energy interval; every split assigns the top band to reflection, the middle band to transmission, and the bottom band to absorption. Traveling descendants retain those disjoint altitude intervals.
+- Absorbed bands turn sharply downward into one cumulative pie target per layer. Each filled wedge reports that layer’s absorbed fraction of the initial pulse.
 - A compact energy-flow visualization showing reflected energy, solar energy reaching the room, heat from absorbed sunlight reaching the room, and energy rejected outdoors.
 - Summary metrics for total room heat gain and effective R-value.
 - Plain-language comparison cues and model notes.
